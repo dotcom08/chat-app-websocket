@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import createTokenAndSetCookie from "../lib/index.js";
 import supabase from "../lib/supabase.js";
 
-export async function Login(req, res) {
+export async function SignUp(req, res) {
   try {
     const { fullName, email, password } = req.body;
 
@@ -35,20 +35,16 @@ export async function Login(req, res) {
     });
 
     // jsonwebtoken
-    const token = createTokenAndSetCookie(newUser._id, res);
+    createTokenAndSetCookie(newUser._id, res);
 
-    res.status(200).json({
-      success: true,
-      message: "User created successfully",
-      user: newUser,
-    });
+    res.status(200).json(newUser);
   } catch (error) {
-    console.log("Error in login controller", error.message);
+    console.log("Error in signup controller", error.message);
     res.status(400).json({ success: false, message: error.message });
   }
 }
 
-export async function SignUp(req, res) {
+export async function Login(req, res) {
   try {
     const { email, password } = req.body;
 
@@ -72,11 +68,9 @@ export async function SignUp(req, res) {
 
     createTokenAndSetCookie(user._id, res);
 
-    res
-      .status(200)
-      .json({ success: true, message: "User logged in successfully", user });
+    res.status(200).json(user);
   } catch (error) {
-    console.log("Error in signup controller", error.message);
+    console.log("Error in login controller", error.message);
     res.status(400).json({ success: false, message: error.message });
   }
 }
@@ -98,10 +92,18 @@ export async function UpdateProfile(req, res) {
     const { picProfile } = req.body;
     const userID = req.user._id;
 
+    if(!userID) {
+      return res.status(400).json({ success: false, message: "User not authenticated" });
+    }
+
     if (!picProfile) {
       res
         .status(400)
         .json({ success: false, message: "Profile pic is required" });
+    }
+
+    if(!process.env.SUPABASE_BUCKET_NAME) {
+      return res.status(400).json({ success: false, message: "SUPABASE_BUCKET_NAME is not set" });
     }
 
     const base64Data = picProfile.replace(/^data:image\/\w+;base64,/, "");
@@ -111,14 +113,14 @@ export async function UpdateProfile(req, res) {
 
     // Uploader l'image vers Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
-      .from(process.env.SUPABASE_BUCKET_NAME) 
+      .from(process.env.SUPABASE_BUCKET_NAME)
       .upload(fileName, buffer, {
-        contentType: "image/jpeg", 
-        upsert: true, 
+        contentType: "image/jpeg",
+        upsert: true,
       });
 
     if (uploadError) {
-      console.log("Erreur lors de l'upload de l'image", uploadError);
+      console.log("Erreur lors de l'upload de l'image :", uploadError);
       return res
         .status(400)
         .json({ success: false, message: uploadError.message });
@@ -128,7 +130,7 @@ export async function UpdateProfile(req, res) {
       .from(process.env.SUPABASE_BUCKET_NAME)
       .getPublicUrl(fileName);
 
-    const picProfileUrl = publicUrlData.publicUrl;
+    const picProfileUrl = supabase.storage.from(process.env.SUPABASE_BUCKET_NAME).getPublicUrl(fileName);
 
     const user = await User.findByIdAndUpdate(
       userID,
@@ -136,11 +138,11 @@ export async function UpdateProfile(req, res) {
       { new: true }
     );
 
-    res.status(200).json({
-      success: true,
-      message: "Profile pic updated successfully",
-      user,
-    });
+    if(!user){
+      res.status(400).json({ success: false, message: "User not found" });
+    }
+
+    res.status(200).json(user);
   } catch (error) {
     console.log("Error in update profile controller", error.message);
     res.status(400).json({ success: false, message: error.message });
@@ -149,13 +151,7 @@ export async function UpdateProfile(req, res) {
 
 export function CheckAuth(req, res) {
   try {
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: "Auth checked successfully",
-        user: req.user,
-      });
+    res.status(200).json(req.user);
   } catch (error) {
     console.log("Error in check auth controller", error.message);
     res.status(400).json({ success: false, message: error.message });
