@@ -1,7 +1,7 @@
 import User from "../models/auth.model.js";
 import bcrypt from "bcryptjs";
 import createTokenAndSetCookie from "../lib/index.js";
-import supabase from "../lib/supabase.js";
+import cloudinary from "../lib/cloudinary.js";
 
 export async function SignUp(req, res) {
   try {
@@ -102,39 +102,12 @@ export async function UpdateProfile(req, res) {
         .json({ success: false, message: "Profile pic is required" });
     }
 
-    if(!process.env.SUPABASE_BUCKET_NAME) {
-      return res.status(400).json({ success: false, message: "SUPABASE_BUCKET_NAME is not set" });
-    }
+    const uploadResponse = await cloudinary.uploader.upload(picProfile);
 
-    const base64Data = picProfile.replace(/^data:image\/\w+;base64,/, "");
-    const buffer = Buffer.from(base64Data, "base64");
-
-    const fileName = `profile_${userID}_${Date.now()}.jpg`;
-
-    // Uploader l'image vers Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from(process.env.SUPABASE_BUCKET_NAME)
-      .upload(fileName, buffer, {
-        contentType: "image/jpeg",
-        upsert: true,
-      });
-
-    if (uploadError) {
-      console.log("Erreur lors de l'upload de l'image :", uploadError);
-      return res
-        .status(400)
-        .json({ success: false, message: uploadError.message });
-    }
-
-    const { data: publicUrlData } = await supabase.storage
-      .from(process.env.SUPABASE_BUCKET_NAME)
-      .getPublicUrl(fileName);
-
-    const picProfileUrl = supabase.storage.from(process.env.SUPABASE_BUCKET_NAME).getPublicUrl(fileName);
 
     const user = await User.findByIdAndUpdate(
       userID,
-      { picProfile: picProfileUrl },
+      { picProfile: uploadResponse.secure_url },
       { new: true }
     );
 
@@ -142,6 +115,7 @@ export async function UpdateProfile(req, res) {
       res.status(400).json({ success: false, message: "User not found" });
     }
 
+    
     res.status(200).json(user);
   } catch (error) {
     console.log("Error in update profile controller", error.message);

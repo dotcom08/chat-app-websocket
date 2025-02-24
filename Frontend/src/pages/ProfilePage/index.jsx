@@ -1,7 +1,6 @@
 import { useAuthStore } from "../../store/useAuthStore";
 import { useState } from "react";
 import { Camera, Mail, User } from "lucide-react";
-import { toast } from "react-hot-toast";
 
 export default function ProfilePage() {
   const [selectedImage, setSelectedImage] = useState(null);
@@ -15,37 +14,18 @@ export default function ProfilePage() {
     const file = e.target.files[0];
     if (!file) return;
 
-    const maxSize = 5 * 1024 * 1024; // 5 Mo
-    if (file.size > maxSize) {
-      toast.error("File size exceeds the limit of 5 MB");
-      return;
-    }
+    const reader = new FileReader();
 
-    try {
-      const base64Data = await convertToBase64(file);
-      const response = await updateProfile({ picProfile: base64Data });
+    reader.readAsDataURL(file);
 
-      if (response.success) {
-        setSelectedImage(base64Data);
-        toast.success("Profile pic updated successfully");
-      } else {
-        toast.error(response.message);
-      }
-    } catch (error) {
-      console.error("Error while uploading image", error);
-      toast.error("Error while uploading image");
-    }
+    reader.onload = async () => {
+      const base64Data = reader.result;
+
+      setSelectedImage(base64Data);
+      await updateProfile({ picProfile: base64Data });
+    };
   };
 
-  const convertToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (error) => reject(error);
-    });
-  };
   return (
     <div className="h-screen pt-20">
       <div className="max-w-2xl mx-auto px-4 py-8">
